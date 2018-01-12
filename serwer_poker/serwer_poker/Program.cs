@@ -35,33 +35,46 @@ namespace serwer_poker
         }
 
         /*Rozdawanie NumberOfCards kart z talii Deck graczowi Player*/
-        static void DealCards(List<byte> Deck, Player Player, int NumberOfCards)
+        static List<byte> DealCards(List<byte> Deck, int NumberOfCards)
         {
             Random RandomNumber = new Random();
+            List<byte> DealtCards = new List<byte>();
             int IndexOfCard;
             byte Card;
             for (int i = 0; i < NumberOfCards; i++)
             {
                 IndexOfCard = RandomNumber.Next(0, Deck.Count - 1);
                 Card = Deck.ElementAt(IndexOfCard);
+                DealtCards.Add(Card);
                 Deck.RemoveAt(IndexOfCard);
-                Player.AddCard(Card);
+            }
+            return DealtCards;
+        }
+
+        static void WhoIsPlaying(List<Player> Players)
+        {
+            foreach (Player Player in Players)
+            {
+                if(!Player.IsPlaying)
+                {
+                    Players.Remove(Player);
+                }
             }
         }
 
-        /*Przeciążenie metody DealCards do rozdania kart wspólnych*/
-        static void DealCards(List<byte> Deck, Table Table, int NumberOfCards)
-        {
-            Random RandomNumber = new Random();
-            int IndexOfCard;
-            byte Card;
-            for (int i = 0; i < NumberOfCards; i++)
-            {
-                IndexOfCard = RandomNumber.Next(0, Deck.Count - 1);
-                Card = Deck.ElementAt(IndexOfCard);
-                Table.AddCard(Card);
-            }
-        }
+        ///*Przeciążenie metody DealCards do rozdania kart wspólnych*/
+        //static void DealCards(List<byte> Deck, Table Table, int NumberOfCards)
+        //{
+        //    Random RandomNumber = new Random();          
+        //    int IndexOfCard;
+        //    byte Card;
+        //    for (int i = 0; i < NumberOfCards; i++)
+        //    {
+        //        IndexOfCard = RandomNumber.Next(0, Deck.Count - 1);
+        //        Card = Deck.ElementAt(IndexOfCard);
+        //        Table.AddCard(Card);
+        //    }
+        //}
 
         /*Zmiana kolejności graczy po rundzie*/
         static void OrderPlayers(List<Player> ListOfPlayers)
@@ -79,44 +92,79 @@ namespace serwer_poker
         /*Pierwsze rozdanie kart*/
         static void FirstDeal(List<Player> Players, List<byte> Deck)
         {
+            int IndexofCard = 0;
+            List<byte> TempDeck = DealCards(Deck, Players.Count()*2);
             foreach (Player Player in Players)
             {
-                if (Player.IsPlaying)
-                {
-                    DealCards(Deck, Player, 1);
-                }
+                Player.AddCard(TempDeck.ElementAt(IndexofCard));
+                IndexofCard++;
             }
             foreach (Player Player in Players)
             {
-                if (Player.IsPlaying)
-                {
-                    DealCards(Deck, Player, 1);
-                }
+                Player.AddCard(TempDeck.ElementAt(IndexofCard));
+                IndexofCard++;
             }
+            TempDeck.Clear();
+        }
+
+        static void SmallBlind(Player Player, Table Table)
+        {
+            if (Player.Chips < 50)/*wartości stawek do ustalenia*/
+            {
+                Table.Pot += Player.Chips;
+                Player.Chips = 0;
+            }
+            else
+            {
+                Table.Pot += 50;
+                Player.Chips -= 50;
+            }
+        }
+
+        static void BigBlind(Player Player, Table Table)
+        {
+            if (Player.Chips < 100)/*wartości stawek do ustalenia*/
+            {
+                Table.Pot += Player.Chips;
+                Player.Chips = 0;
+            }
+            else
+            {
+                Table.Pot += 100;
+                Player.Chips -= 100;
+            }
+        }
+
+        static void FirstBetting(List<Player> Players, Table Table)
+        {
+            if(Players.Count() <= 2)
+            {
+                SmallBlind(Players.ElementAt(0), Table);
+                BigBlind(Players.ElementAt(1), Table);
+            }
+            else
+            {
+                SmallBlind(Players.ElementAt(1), Table);
+                BigBlind(Players.ElementAt(2), Table);
+            }
+
+            
         }
 
         static void Main(string[] args)
         {
             List<byte> DeckTemplate = new List<byte>();
-            Player Player1 = new Player { Chips = 1000, IsPlaying = true, ID=1 };
-            Player Player2 = new Player { Chips = 1000, IsPlaying = true, ID=2 };
-            Player Player3 = new Player { Chips = 1000, IsPlaying = true, ID=3 };
-            Player Player4 = new Player { Chips = 1000, IsPlaying = true, ID=4 };
+            Player Player1 = new Player { Chips = 1000, IsPlaying = true, ID=1, Fold = false };
+            Player Player2 = new Player { Chips = 1000, IsPlaying = true, ID=2, Fold = false };
+            Player Player3 = new Player { Chips = 1000, IsPlaying = true, ID=3, Fold = false };
+            Player Player4 = new Player { Chips = 1000, IsPlaying = true, ID=4, Fold = false };
             List<Player> AllPlayers = new List<Player>(){ Player1, Player2, Player3, Player4 };
-            Table Table = new Table();
+            WhoIsPlaying(AllPlayers);
+            Table Table = new Table { Pot = 0 };
             DeckTemplate = CreateDeck();
             List<byte> DeckToPlay = DeckTemplate;//Przypisanie talii do nowej zmiennej, która będzie modyfikowana
             FirstDeal(AllPlayers, DeckToPlay);
-            Console.WriteLine(DeckToPlay.Count);
-            Console.ReadKey();
-            foreach (var Player in AllPlayers)
-            {
-                Console.WriteLine("Ręka gracza nr " + Player.ID);
-                foreach (var item in Player.Hand)
-                {
-                    Console.WriteLine("Karta: " + item);
-                }
-            }
+            FirstBetting(AllPlayers, Table);
             Console.ReadKey();
         }
     }

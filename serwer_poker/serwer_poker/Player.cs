@@ -12,6 +12,7 @@ namespace serwer_poker
         public int ID;
         public int Chips;
         public bool IsPlaying;
+        public bool Fold;
 
         public void AddCard(byte Card)
         {
