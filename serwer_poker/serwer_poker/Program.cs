@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+
 namespace serwer_poker
 {
     class Program
@@ -107,16 +108,23 @@ namespace serwer_poker
             TempDeck.Clear();
         }
 
+        static void DealOnTable(Table Table, List<byte> Deck, int NumberOfCards)
+        {
+            Table.CommunityCards = DealCards(Deck, NumberOfCards);
+        }
+
         static void SmallBlind(Player Player, Table Table)
         {
             if (Player.Chips < 50)/*wartości stawek do ustalenia*/
             {
                 Table.Pot += Player.Chips;
+                Player.Bet = Player.Chips;
                 Player.Chips = 0;
             }
             else
             {
                 Table.Pot += 50;
+                Player.Bet = 50;
                 Player.Chips -= 50;
             }
         }
@@ -126,45 +134,227 @@ namespace serwer_poker
             if (Player.Chips < 100)/*wartości stawek do ustalenia*/
             {
                 Table.Pot += Player.Chips;
+                Player.Bet = Player.Chips;
                 Player.Chips = 0;
             }
             else
             {
                 Table.Pot += 100;
+                Player.Bet = 100;
                 Player.Chips -= 100;
             }
+            Table.Bid = 100;//jak bigblind
+        }
+
+        static void Call(Player Player, Table Table)
+        {
+            Table.Pot += (Table.Bid - Player.Bet);
+            Player.Chips -= (Table.Bid - Player.Bet);
+        }
+
+        static void Raise(Player Player, Table Table, int Bid)
+        {
+            int Difference = Table.Bid - Player.Bet + Bid;
+            Table.Pot += Difference;
+            Player.Bet += Difference;
+            Table.Bid += Difference; 
+            Player.Chips -= Difference;
+        }
+
+        static void AllIn(Player Player, Table Table)
+        {
+            Table.Pot += Player.Chips;
+            Player.Chips = 0;
+            Player.Bet += Player.Chips;
+            Table.Bid = Player.Bet;
         }
 
         static void FirstBetting(List<Player> Players, Table Table)
         {
-            if(Players.Count() <= 2)
+            int Decision=0;
+            bool ContinueBetting = true;
+            int IndexOfPlayer;
+            if (Players.Count() <= 2)
             {
                 SmallBlind(Players.ElementAt(0), Table);
                 BigBlind(Players.ElementAt(1), Table);
+                Players.ElementAt(1).Check = true;
+                IndexOfPlayer = 0;
             }
             else
             {
                 SmallBlind(Players.ElementAt(1), Table);
                 BigBlind(Players.ElementAt(2), Table);
+                Players.ElementAt(2).Check = true;
+                IndexOfPlayer = 3;
             }
 
-            
+            while (ContinueBetting==true)
+            {
+            /*decyzja gracza zapisana do zmiennej
+             przesyłana jako int:
+             -1 - fold, 0 - call, wartość_int - raise, max_int - all in
+             potrzeba jeszcze wartosci na check, tymczasowo -10*/
+                switch (Decision)
+                {
+                    case -10://check
+                        Players.ElementAt(IndexOfPlayer).Check = true;
+                        break;
+                    case -1://fold
+                        Players.ElementAt(IndexOfPlayer).Fold = true;
+                        break;
+                    case 0://call
+                        Call(Players.ElementAt(IndexOfPlayer), Table);
+                        break;
+                    case 2147483647://all in
+                        AllIn(Players.ElementAt(IndexOfPlayer), Table);
+                        foreach (Player Player in Players)
+                        {
+                            if (!Player.Fold)
+                            {
+                                Player.Check = false;
+                            }
+                        }
+                        break;
+                    default://call+raise
+                        Raise(Players.ElementAt(IndexOfPlayer), Table, Decision);
+                        foreach (Player Player in Players)
+                        {
+                            if (!Player.Fold)
+                            {
+                                Player.Check = false;
+                            }
+                        }
+                        break;
+                }
+
+                if (IndexOfPlayer == Players.Count() - 1)
+                {
+                    IndexOfPlayer = 0;
+                }
+                else
+                {
+                    IndexOfPlayer++;
+                }
+
+                foreach (Player Player in Players)
+                {
+                    if (!Player.Fold)
+                    {
+                        ContinueBetting = Player.Check;
+                    }
+                }
+            }
+
+            foreach (Player Player in Players)
+            {
+                if (!Player.Fold)
+                {
+                    Player.Check = false;
+                }
+            }
+        }
+
+        static void Betting(List<Player> Players, Table Table)
+        {
+            int Decision = 0;
+            bool ContinueBetting = true;
+            int IndexOfPlayer;
+            if (Players.Count() <= 2)
+            {
+                IndexOfPlayer = 0;
+            }
+            else
+            {
+                IndexOfPlayer = 3;
+            }
+
+            while (ContinueBetting == true)
+            {
+                /*decyzja gracza zapisana do zmiennej
+                 przesyłana jako int:
+                 -1 - fold, 0 - call, wartość_int - raise, max_int - all in
+                 potrzeba jeszcze wartosci na check, tymczasowo -10*/
+                switch (Decision)
+                {
+                    case -10://check
+                        Players.ElementAt(IndexOfPlayer).Check = true;
+                        break;
+                    case -1://fold
+                        Players.ElementAt(IndexOfPlayer).Fold = true;
+                        break;
+                    case 0://call
+                        Call(Players.ElementAt(IndexOfPlayer), Table);
+                        break;
+                    case 2147483647://all in
+                        AllIn(Players.ElementAt(IndexOfPlayer), Table);
+                        foreach (Player Player in Players)
+                        {
+                            if (!Player.Fold)
+                            {
+                                Player.Check = false;
+                            }
+                        }
+                        break;
+                    default://call+raise
+                        Raise(Players.ElementAt(IndexOfPlayer), Table, Decision);
+                        foreach (Player Player in Players)
+                        {
+                            if (!Player.Fold)
+                            {
+                                Player.Check = false;
+                            }
+                        }
+                        break;
+                }
+
+                if (IndexOfPlayer == Players.Count() - 1)
+                {
+                    IndexOfPlayer = 0;
+                }
+                else
+                {
+                    IndexOfPlayer++;
+                }
+
+                foreach (Player Player in Players)
+                {
+                    if (!Player.Fold)
+                    {
+                        ContinueBetting = Player.Check;
+                    }
+                }
+            }
+
+            foreach (Player Player in Players)
+            {
+                if (!Player.Fold)
+                {
+                    Player.Check = false;
+                }
+            }
         }
 
         static void Main(string[] args)
         {
             List<byte> DeckTemplate = new List<byte>();
-            Player Player1 = new Player { Chips = 1000, IsPlaying = true, ID=1, Fold = false };
-            Player Player2 = new Player { Chips = 1000, IsPlaying = true, ID=2, Fold = false };
-            Player Player3 = new Player { Chips = 1000, IsPlaying = true, ID=3, Fold = false };
-            Player Player4 = new Player { Chips = 1000, IsPlaying = true, ID=4, Fold = false };
+            Player Player1 = new Player { Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
+            Player Player2 = new Player { Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
+            Player Player3 = new Player { Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
+            Player Player4 = new Player { Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
             List<Player> AllPlayers = new List<Player>(){ Player1, Player2, Player3, Player4 };
             WhoIsPlaying(AllPlayers);
-            Table Table = new Table { Pot = 0 };
+            Table Table = new Table { Pot = 0, Bid = 0 };
             DeckTemplate = CreateDeck();
             List<byte> DeckToPlay = DeckTemplate;//Przypisanie talii do nowej zmiennej, która będzie modyfikowana
             FirstDeal(AllPlayers, DeckToPlay);
             FirstBetting(AllPlayers, Table);
+            DealOnTable(Table, DeckToPlay, 3);
+            Betting(AllPlayers, Table);
+            DealOnTable(Table, DeckToPlay, 1);
+            Betting(AllPlayers, Table);
+            DealOnTable(Table, DeckToPlay, 1);
+            Betting(AllPlayers, Table);
             Console.ReadKey();
         }
     }

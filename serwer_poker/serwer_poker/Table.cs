@@ -9,7 +9,8 @@ namespace serwer_poker
     class Table
     {
         public List<byte> CommunityCards = new List<byte>();
-        public int Pot;
+        public int Pot;//aktualna pula
+        public int Bid;//aktualna stawka
 
         public void AddCard(byte Card)
         {
