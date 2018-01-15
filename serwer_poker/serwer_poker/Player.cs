@@ -14,10 +14,20 @@ namespace serwer_poker
         public bool Fold;
         public bool Check;
         public int Bet;
+        public int ID;
 
         public void AddCard(byte Card)
         {
             Hand.Add(Card);
+        }
+
+        public void ShowCards()
+        {
+            Console.WriteLine("Ręka gracza " + ID);
+            foreach (var Card in Hand)
+            {
+                    Console.WriteLine(Card);
+            }
         }
     }
 }

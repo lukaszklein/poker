@@ -16,5 +16,14 @@ namespace serwer_poker
         {
             CommunityCards.Add(Card);
         }
+
+        public void ShowCards()
+        {
+            Console.WriteLine("Karty na stole:");
+            foreach (byte Card in CommunityCards)
+            {
+                Console.WriteLine(Card);
+            }
+        }
     }
 }
