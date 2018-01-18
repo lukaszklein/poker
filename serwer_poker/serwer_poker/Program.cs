@@ -35,6 +35,7 @@ namespace serwer_poker
             return TempDeck;
         }
 
+        /*Usuwanie z listy graczy nieaktywnych użytkowników*/
         static void WhoIsPlaying(List<Player> Players)
         {
             bool AllClear = false;
@@ -48,12 +49,14 @@ namespace serwer_poker
                         break;
                     }
                     else
+                    {
                         AllClear = true;
+                    }
                 }
             }
         }
 
-        /*Rozdawanie NumberOfCards kart z talii Deck graczowi Player*/
+        /*Rozdawanie NumberOfCards kart z talii Deck*/
         static List<byte> DealCards(List<byte> Deck, int NumberOfCards)
         {
             Random RandomNumber = new Random();
@@ -68,21 +71,6 @@ namespace serwer_poker
                 Deck.RemoveAt(IndexOfCard);
             }
             return DealtCards;
-        }
-
-        /*Przeciążenie metody DealCards do rozdania kart wspólnych*/
-        static void DealCards(List<byte> Deck, Table Table, int NumberOfCards)
-        {
-            Random RandomNumber = new Random();
-            int IndexOfCard;
-            byte Card;
-            for (int i = 0; i < NumberOfCards; i++)
-            {
-                IndexOfCard = RandomNumber.Next(0, Deck.Count - 1);
-                Card = Deck.ElementAt(IndexOfCard);
-                Table.AddCard(Card);
-                Deck.RemoveAt(IndexOfCard);
-            }
         }
 
         /*Zmiana kolejności graczy po rundzie*/
@@ -115,11 +103,6 @@ namespace serwer_poker
             }
             TempDeck.Clear();
         }
-
-        //static void DealOnTable(Table Table, List<byte> Deck, int NumberOfCards)
-        //{
-        //    Table.CommunityCards = DealCards(Deck, NumberOfCards);
-        //}
 
         static void SmallBlind(Player Player, Table Table)
         {
@@ -171,37 +154,37 @@ namespace serwer_poker
             Player.Chips -= Bid;
         }
 
+        /*Pierwsza licytacja obejmująca Blindy*/
         static void FirstBetting(List<Player> Players, Table Table)
         {
+            /*Ustalenie rozpoczynającego gracza i przydzielenie blindów*/
             int IndexOfPlayer;
             if (Players.Count() == 2)
             {
                 SmallBlind(Players.ElementAt(0), Table);
                 BigBlind(Players.ElementAt(1), Table);
-                Players.ElementAt(1).Check = true;
                 IndexOfPlayer = 0;
             }
-            if (Players.Count() == 3)
+            else if (Players.Count() == 3)
             {
                 SmallBlind(Players.ElementAt(1), Table);
                 BigBlind(Players.ElementAt(2), Table);
-                Players.ElementAt(2).Check = true;
                 IndexOfPlayer = 0;
             }
             else
             {
                 SmallBlind(Players.ElementAt(1), Table);
                 BigBlind(Players.ElementAt(2), Table);
-                Players.ElementAt(2).Check = true;
                 IndexOfPlayer = 3;
             }
 
             Betting(Players, Table, IndexOfPlayer);
         }
 
+        /*Każda następna licytacja*/
         static void NextBetting(List<Player> Players, Table Table)
         {
-            
+            /*Ustalenie rozpoczynającego gracza*/
             int IndexOfPlayer;
             if (Players.Count() <= 3)
             {
@@ -215,6 +198,7 @@ namespace serwer_poker
             Betting(Players, Table, IndexOfPlayer);
         }
 
+        /*Metoda licytacji*/
         static void Betting(List<Player> Players, Table Table, int IndexOfPlayer)
         {
             int Decision = 0;
@@ -267,7 +251,7 @@ namespace serwer_poker
                                     break;
                                 }
                             }
-                        case 5000:/*all in*/
+                        case 5000:/*all in - wartość do edycji*/
                             {
                                 Console.WriteLine("all in");
                                 Call(Players.ElementAt(IndexOfPlayer), Table);
@@ -299,6 +283,7 @@ namespace serwer_poker
 
                 }
 
+                /*Ustalenie następnego gracza do licytacji*/
                 if (IndexOfPlayer == Players.Count() - 1)
                 {
                     IndexOfPlayer = 0;
@@ -308,7 +293,7 @@ namespace serwer_poker
                     IndexOfPlayer++;
                 }
 
-
+                /*Sprawdzenie czy niefoldujący gracze dokonali checka*/
                 foreach (Player Player in Players)
                 {
                     if (!Player.Fold)
@@ -317,10 +302,12 @@ namespace serwer_poker
                     }
                 }
 
+                /*Jeśli wszyscy schekowali, to następuje wyjście z licytacji*/
                 ContinueBetting = !Control;
                 Console.WriteLine("zmienna continuebetting: " + ContinueBetting);
             }
 
+            /*Przygotowanie do następnej rundy*/
             foreach (Player Player in Players)
             {
                 if (!Player.Fold)
@@ -330,7 +317,444 @@ namespace serwer_poker
             }
         }
 
-            static void Main(string[] args)
+        /*Usunięcie z ręki powtarzających się wartości kart na potrzeby ewaluacji*/
+        static List<byte> DistinctHand(List<byte> Deck)
+        {
+            List<byte> DistinctDeck = new List<byte>();
+            byte Card;
+            for (int Index = 0; Index <= Deck.Count() - 2; Index++)
+            {
+                if (Deck.ElementAt(Index) != Deck.ElementAt(Index + 1))
+                {
+                    Card = Deck.ElementAt(Index);
+                    DistinctDeck.Add(Card);
+                }
+            }
+            Card = Deck.ElementAt(6);
+            if (!DistinctDeck.Contains(Card))
+            {
+                DistinctDeck.Add(Card);
+            }
+
+            return DistinctDeck;
+        }
+
+        /*Określenie wartości ręki każdego gracza*/
+        static void Evaluate(List<Player> Players, List<byte> TableCards)
+        {
+            foreach (Player Player in Players)
+            {
+                if (!Player.Fold)
+                {
+                    List<byte> WholeHand = Player.Hand;
+                    WholeHand.AddRange(TableCards);
+
+                    byte ValueCard;
+                    List<byte> ValueHand = new List<byte>();
+                    foreach (byte Card in WholeHand)
+                    {
+                        ValueCard = (byte)(Card % 16);
+                        ValueHand.Add(ValueCard);
+                    }
+
+                    ValueHand.Sort();
+                    int HowMany;
+
+                    /*Sprawdzanie ręki pod kątem występowania par, trójek, karet oraz dwóch par i fula*/
+                    uint Pair1 = 0;
+                    uint Pair2 = 0;
+                    uint Three1 = 0;
+                    uint Quad1 = 0;
+                    uint Value = 0;
+                    bool HighCard = false;
+                    bool Pair = false;
+                    bool Three = false;
+                    bool Quad = false;
+
+                    for (byte Index = 2; Index <= 14; Index++)
+                    {
+                        if (ValueHand.LastIndexOf(Index) == -1)
+                        {
+                            HowMany = 0;
+                        }
+                        else
+                        {
+                            HowMany = ValueHand.LastIndexOf(Index) - ValueHand.IndexOf(Index) + 1;
+                        }
+                        switch (HowMany)
+                        {
+                            case 0:
+                                {
+                                    Console.WriteLine("brak karty: " + Index);
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    Console.WriteLine("pojedyncza karta: " + Index);
+                                    if (Index > Player.HighCard)
+                                    {
+                                        Player.HighCard = Index;
+                                    }
+                                    HighCard = true;
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    Console.WriteLine("para: " + Index);
+                                    Value = (uint)Index * 1000;
+                                    if (Value > Pair2)
+                                    {
+                                        Pair1 = Pair2 / 100;
+                                        Pair2 = Value;
+                                    }
+                                    Pair = true;
+                                    break;
+                                }
+                            case 3:
+                                {
+                                    Console.WriteLine("trojka: " + Index);
+                                    Value = (uint)Index * 100000;
+                                    if (Value > Three1)
+                                    {
+                                        Three1 = Value;
+                                    }
+                                    Three = true;
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    Console.WriteLine("kareta: " + Index);
+                                    Value = (uint)Index * 100000000;
+                                    if (Value > Quad1)
+                                    {
+                                        Quad1 = Value;
+                                    }
+                                    Quad = true;
+                                    break;
+                                }
+                        }
+                    }
+
+                    /*Sprawdzanie ręki pod kątem występowania stritów*/
+                    List<byte> DistinctPlayerHand = DistinctHand(ValueHand);/*usunięcie z ręki duplikatów*/
+                    bool Straight = false;
+                    uint Straight1 = 0;
+                    int DifferenceOne = 0;
+
+                    if (!Quad && DistinctPlayerHand.Count() >= 5)
+                    {
+                        if (DistinctPlayerHand.Contains(14))
+                        {
+                            Straight = true;
+                            for (byte Index = 2; Index < 6; Index++)
+                            {
+                                if (DistinctPlayerHand.Contains(Index))
+                                {
+                                    Straight &= true;
+                                }
+                                else
+                                {
+                                    Straight = false;
+                                }
+                            }
+                            if (Straight)
+                            {
+                                Straight1 = DistinctPlayerHand.ElementAt(3);
+                                Straight1 *= 1000000;
+                                Console.WriteLine("jest taki strit");
+                            }
+                            else Console.WriteLine("nie ma takiego strita");
+                        }
+                        Console.WriteLine("sprawdzam strita w pierwszych pięciu kartach");
+                        for (byte Index = 0; Index < 4; Index++)
+                        {
+                            if (DistinctPlayerHand.ElementAt(Index + 1) - DistinctPlayerHand.ElementAt(Index) == 1)
+                            {
+                                DifferenceOne++;
+                            }
+                        }
+                        if (DifferenceOne >= 4)
+                        {
+                            Straight = true;
+                            Straight1 = DistinctPlayerHand.ElementAt(4);
+                            Straight1 *= 1000000;
+                            Console.WriteLine("jest taki strit");
+                        }
+                        else
+                        {
+                            Straight = false;
+                            Console.WriteLine("nie ma takiego strita");
+                        }
+                        DifferenceOne = 0;
+
+                        if (DistinctPlayerHand.Count() >= 6)
+                        {
+                            Console.WriteLine("co najmniej 6 kart");
+                            Console.WriteLine("sprawdzam strita od 2 do szóstej karty");
+                            for (byte Index = 1; Index < 5; Index++)
+                            {
+                                if (DistinctPlayerHand.ElementAt(Index + 1) - DistinctPlayerHand.ElementAt(Index) == 1)
+                                {
+                                    DifferenceOne++;
+                                }
+                            }
+
+                            if (DifferenceOne >= 4)
+                            {
+                                Straight = true;
+                                Straight1 = DistinctPlayerHand.ElementAt(5);
+                                Straight1 *= 1000000;
+                                Console.WriteLine("jest taki strit");
+                            }
+                            else
+                            {
+                                Straight = false;
+                                Console.WriteLine("nie ma takiego strita");
+                            }
+                            DifferenceOne = 0;
+
+                            if (DistinctPlayerHand.Count() == 7)
+                            {
+                                Console.WriteLine("jest 7 kart");
+                                Console.WriteLine("sprawdzam strita od 3 do siódmej karty");
+                                for (byte Index = 2; Index < 6; Index++)
+                                {
+                                    if (DistinctPlayerHand.ElementAt(Index + 1) - DistinctPlayerHand.ElementAt(Index) == 1)
+                                    {
+                                        DifferenceOne++;
+                                    }
+                                }
+
+                                if (DifferenceOne >= 4)
+                                {
+                                    Straight = true;
+                                    Straight1 = DistinctPlayerHand.ElementAt(6);
+                                    Straight1 *= 1000000;
+                                    Console.WriteLine("jest taki strit");
+                                }
+                                else
+                                {
+                                    Straight = false;
+                                    Console.WriteLine("nie ma takiego strita");
+                                }
+                                DifferenceOne = 0;
+                            }
+                        }
+                    }
+                    Console.WriteLine("wartość straight1: " + Straight1);
+                    /*koniec strita*/
+
+                    /*kolor*/
+                    bool Color = false;
+                    List<byte> Hearts = new List<byte>();
+                    List<byte> Spades = new List<byte>();
+                    List<byte> Diamonds = new List<byte>();
+                    List<byte> Clubs = new List<byte>();
+                    List<byte> ColorHand = new List<byte>();
+                    uint Color1 = 15000000;
+                    WholeHand.Sort();
+
+                    foreach (byte Card in WholeHand)
+                    {
+                        if (Card < 16)
+                        {
+                            Hearts.Add(Card);
+                        }
+                        else if (16 <= Card && Card < 32)
+                        {
+                            Spades.Add(Card);
+                        }
+                        else if (32 <= Card && Card < 48)
+                        {
+                            Diamonds.Add(Card);
+                        }
+                        else if (48 <= Card)
+                        {
+                            Clubs.Add(Card);
+                        }
+                    }
+                    if (Hearts.Count() >= 5)
+                    {
+                        byte ColorCard;
+                        Color = true;
+                        foreach (byte Card in Hearts)
+                        {
+                            ColorCard = (byte)(Card % 16);
+                            ColorHand.Add(ColorCard);
+                        }
+                        ColorHand.Sort();
+                    }
+                    else if (Spades.Count >= 5)
+                    {
+                        byte ColorCard;
+                        Color = true;
+                        foreach (byte Card in Spades)
+                        {
+                            ColorCard = (byte)(Card % 16);
+                            ColorHand.Add(ColorCard);
+                        }
+                        ColorHand.Sort();
+                    }
+                    else if (Diamonds.Count >= 5)
+                    {
+                        byte ColorCard;
+                        Color = true;
+                        foreach (byte Card in Diamonds)
+                        {
+                            ColorCard = (byte)(Card % 16);
+                            ColorHand.Add(ColorCard);
+                        }
+                        ColorHand.Sort();
+                    }
+                    else if (Clubs.Count >= 5)
+                    {
+                        byte ColorCard;
+                        Color = true;
+                        foreach (byte Card in Clubs)
+                        {
+                            ColorCard = (byte)(Card % 16);
+                            ColorHand.Add(ColorCard);
+                        }
+                        ColorHand.Sort();
+                    }
+
+                    /*sprawdzanie pokera (strit + kolor)*/
+                    bool StraightColor = false;
+                    int DifferenceOneColor = 0;
+                    uint StraightColor1 = 0;
+                    if (Color)
+                    {
+                        for (byte Index = 0; Index < 4; Index++)
+                        {
+                            if (ColorHand.ElementAt(Index + 1) - ColorHand.ElementAt(Index) == 1)
+                            {
+                                DifferenceOneColor++;
+                            }
+                        }
+                        if (DifferenceOne >= 4)
+                        {
+                            StraightColor = true;
+                            StraightColor1 = ColorHand.ElementAt(4);
+                            StraightColor1 *= 1000000;
+                        }
+                        else
+                        {
+                            StraightColor = false;
+                        }
+                        DifferenceOneColor = 0;
+
+                        if (DistinctPlayerHand.Contains(14))
+                        {
+                            StraightColor = true;
+                            for (byte Index = 2; Index < 6; Index++)
+                            {
+                                if (ColorHand.Contains(Index))
+                                {
+                                    StraightColor &= true;
+                                }
+                                else
+                                {
+                                    StraightColor = false;
+                                }
+                                if (StraightColor)
+                                {
+                                    StraightColor1 = DistinctPlayerHand.ElementAt(3);
+                                    StraightColor1 *= 1000000;
+                                }
+                            }
+                        }
+
+                        if (ColorHand.Count() >= 6)
+                        {
+                            for (byte Index = 1; Index < 5; Index++)
+                            {
+                                if (ColorHand.ElementAt(Index + 1) - ColorHand.ElementAt(Index) == 1)
+                                {
+                                    DifferenceOneColor++;
+                                }
+                            }
+
+                            if (DifferenceOneColor >= 4)
+                            {
+                                StraightColor = true;
+                                StraightColor1 = ColorHand.ElementAt(5);
+                                StraightColor1 *= 1000000;
+                            }
+                            else
+                            {
+                                StraightColor = false;
+                            }
+                            DifferenceOneColor = 0;
+
+                            if (ColorHand.Count() == 7)
+                            {
+                                for (byte Index = 2; Index < 6; Index++)
+                                {
+                                    if (ColorHand.ElementAt(Index + 1) - ColorHand.ElementAt(Index) == 1)
+                                    {
+                                        DifferenceOneColor++;
+                                    }
+                                }
+
+                                if (DifferenceOneColor >= 4)
+                                {
+                                    StraightColor = true;
+                                    StraightColor1 = ColorHand.ElementAt(6);
+                                    StraightColor1 *= 1000000;
+                                }
+                                else
+                                {
+                                    StraightColor = false;
+                                }
+                                DifferenceOneColor = 0;
+                            }
+                        }
+                    }
+
+                    /*Przyznawanie graczowi wartości ręki*/
+                    if (HighCard && !Pair && !Three && !Quad && !Color && !Straight && !StraightColor)
+                    {
+                        Player.ValueOfHand = Player.HighCard;
+                    }
+                    else if (Pair1 == 0 && Pair2 > 0 && !Three && !Quad && !Color && !Straight && !StraightColor)
+                    {
+                        Player.ValueOfHand = Pair2;
+                    }
+                    else if (Pair1 > 0 && Pair2 > 0 && !Three && !Quad && !Color && !Straight && !StraightColor)
+                    {
+                        Player.ValueOfHand = Pair1 + Pair2;
+                    }
+                    else if (Three && !Pair && !Quad && !Color && !Straight && !StraightColor)
+                    {
+                        Player.ValueOfHand = Three1;
+                    }
+                    else if (Straight && !Quad && !Color && !StraightColor)
+                    {
+                        Player.ValueOfHand = Straight1;
+                    }
+                    else if (Color && !Quad && !StraightColor)
+                    {
+                        Player.ValueOfHand = Color1;
+                    }
+                    else if (Three && Pair && !Quad && !StraightColor)
+                    {
+                        Player.ValueOfHand = (Three1 + Pair2) * 100;
+                    }
+                    else if (Quad && !StraightColor)
+                    {
+                        Player.ValueOfHand = Quad1;
+                    }
+                    else if (StraightColor && Color)
+                    {
+                        Player.ValueOfHand = (StraightColor1 + Color1) * 100;
+                    }
+                }
+                Console.WriteLine("Gracz: " + Player.ID + " ma rękę wartą " + Player.ValueOfHand + " punktów. Najwyższa karta: " + Player.HighCard);
+                Console.ReadKey();
+            }
+        }
+
+        static void Main(string[] args)
         {
             List<byte> DeckTemplate = new List<byte>();
             Player Player1 = new Player { ID = 1, Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
@@ -350,34 +774,33 @@ namespace serwer_poker
             Table Table = new Table { Pot = 0, Bid = 0 };
             DeckTemplate = CreateDeck();
             List<byte> DeckToPlay = DeckTemplate;//Przypisanie talii do nowej zmiennej, która będzie modyfikowana
-            Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
             Console.WriteLine("Rozdanie kart graczom");
             FirstDeal(AllPlayers, DeckToPlay);
-            Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
             foreach (Player Player in AllPlayers)
             {
                 Player.ShowCards();
             }
+            List<byte> CardsOnTable = DealCards(DeckToPlay, 5);
             Console.WriteLine("Licytacja 1");
             FirstBetting(AllPlayers, Table);
-            Console.WriteLine("Rozdanie kart na stół");
-            DealCards(DeckToPlay, Table, 3);
-            Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
+            Console.WriteLine("Pierwsze rozdanie kart na stół");
+            Table.Deal(CardsOnTable, 3);
             Table.ShowCards();
             Console.WriteLine("Licytacja 2");
             NextBetting(AllPlayers, Table);
-            Console.WriteLine("Rozdanie kart na stół");
-            DealCards(DeckToPlay, Table, 1);
-            Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
+            Console.WriteLine("Drugie rozdanie kart na stół");
+            Table.Deal(CardsOnTable, 1);
             Table.ShowCards();
             Console.WriteLine("Licytacja 3");
             NextBetting(AllPlayers, Table);
-            Console.WriteLine("Rozdanie kart na stół");
-            DealCards(DeckToPlay, Table, 1);
+            Console.WriteLine("Trzecie i ostatnieozdanie kart na stół");
+            Table.Deal(CardsOnTable, 1);
             Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
             Table.ShowCards();
             Console.WriteLine("Licytacja 4");
             NextBetting(AllPlayers, Table);
+            Console.ReadKey();
+            Evaluate(AllPlayers, Table.CommunityCards);
             Console.ReadKey();
         }
     }

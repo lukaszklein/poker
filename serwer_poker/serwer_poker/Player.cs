@@ -15,6 +15,8 @@ namespace serwer_poker
         public bool Check;
         public int Bet;
         public int ID;
+        public uint ValueOfHand;
+        public uint HighCard;
 
         public void AddCard(byte Card)
         {
@@ -26,7 +28,7 @@ namespace serwer_poker
             Console.WriteLine("Ręka gracza " + ID);
             foreach (var Card in Hand)
             {
-                    Console.WriteLine(Card);
+                Console.WriteLine(Card);
             }
         }
     }

@@ -12,6 +12,16 @@ namespace serwer_poker
         public int Pot;//aktualna pula
         public int Bid;//aktualna stawka
 
+        public void Deal(List<byte> Deck, int NumberOfDealtCrads)
+        {
+            while (NumberOfDealtCrads > 0)
+            {
+                CommunityCards.Add(Deck.ElementAt(0));
+                Deck.RemoveAt(0);
+                NumberOfDealtCrads--;
+            }
+        }
+
         public void AddCard(byte Card)
         {
             CommunityCards.Add(Card);
