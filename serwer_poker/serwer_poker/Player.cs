@@ -9,6 +9,8 @@ namespace serwer_poker
     class Player
     {
         public List<byte> Hand = new List<byte>();
+        public List<byte> TieBreaker = new List<byte>();
+        public List<byte> TieBreakerColor = new List<byte>();
         public int Chips;
         public bool IsPlaying;
         public bool Fold;
@@ -16,7 +18,6 @@ namespace serwer_poker
         public int Bet;
         public int ID;
         public uint ValueOfHand;
-        public uint HighCard;
 
         public void AddCard(byte Card)
         {
