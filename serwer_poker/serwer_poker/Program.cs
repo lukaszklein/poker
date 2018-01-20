@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -106,11 +109,13 @@ namespace serwer_poker
             {
                 Player.AddCard(TempDeck.ElementAt(IndexofCard));
                 IndexofCard++;
+                SendToOne(TempDeck.ElementAt(IndexofCard), Player);
             }
             foreach (Player Player in Players)
             {
                 Player.AddCard(TempDeck.ElementAt(IndexofCard));
                 IndexofCard++;
+                SendToOne(TempDeck.ElementAt(IndexofCard), Player);
             }
             TempDeck.Clear();
         }
@@ -240,7 +245,7 @@ namespace serwer_poker
                      przesyłana jako int:
                      -1 - fold, 0 - call/check, wartość_int - raise, max_int - all in*/
                     Console.WriteLine("podejmij decyzję");
-                    string decyzja = Console.ReadLine();
+                    string decyzja = ReadFromOne(Players.ElementAt(IndexOfPlayer));
                     try
                     {
                         Decision = int.Parse(decyzja);
@@ -1294,14 +1299,115 @@ namespace serwer_poker
             return Players;
         }
 
+        private static TcpListener server;
+        private static TcpClient tcpClient;   
+        delegate void WriteCallBack(string tekst);
+
+        static List<Player> Communication()
+        {
+            IPAddress ip = null;
+            int port = 0;
+            // deklarecja adresu IP
+            while (ip == null)
+            {
+                Console.WriteLine("Podaj adres IP sewera");
+                try
+                {
+                    ip = IPAddress.Parse(Console.ReadLine());
+                }
+                catch
+                {
+                    Console.WriteLine("Niewłaściwy sposób podania typ powinien być 127.0.0.1");
+                }
+            }
+            //deklaracja portu
+            while (port == 0)
+            {
+                Console.WriteLine("Podaj numer portu serwera");
+                try
+                {
+                    port = Int32.Parse(Console.ReadLine());
+                }
+                catch
+                {
+                    Console.WriteLine("Niewłaściwy sposób podania liczba powina być całkowita");
+                }
+            }
+            server = new TcpListener(ip, port);
+            server.Start();
+            Console.WriteLine("Serwer oczekuje na połączenia ...");
+            List<Player> AllPlayers = new List<Player>();
+            int NumerClient = 0;//zmienna do inkrementacji
+            //oczekiwanie na klientów
+            while (NumerClient < 4)
+            {
+                int NumberOfClients = AllPlayers.Count();
+                tcpClient = server.AcceptTcpClient();
+
+                if (NumberOfClients == 0)
+                {
+                    Player Player1 = new Player();
+                    AllPlayers.Add(Player1);
+                }
+                else if (NumberOfClients == 1)
+                {
+                    Player Player2 = new Player();
+                    AllPlayers.Add(Player2);
+                }
+                else if (NumberOfClients == 2)
+                {
+                    Player Player3 = new Player();
+                    AllPlayers.Add(Player3);
+                }
+                else
+                {
+                    Player Player4 = new Player();
+                    AllPlayers.Add(Player4);
+                }
+
+                AllPlayers.ElementAt(NumerClient).PortEnd = ((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port;
+                AllPlayers.ElementAt(NumerClient).IPEnd = ((IPEndPoint)tcpClient.Client.RemoteEndPoint).Address;
+                AllPlayers.ElementAt(NumerClient).NS = tcpClient.GetStream();
+                AllPlayers.ElementAt(NumerClient).Reader = new BinaryReader(AllPlayers.ElementAt(NumerClient).NS);
+                AllPlayers.ElementAt(NumerClient).Writer = new BinaryWriter(AllPlayers.ElementAt(NumerClient).NS);
+                AllPlayers.ElementAt(NumerClient).IsPlaying = true;
+                AllPlayers.ElementAt(NumerClient).ID = NumerClient + 1;
+                AllPlayers.ElementAt(NumerClient).Chips = 1000;
+                AllPlayers.ElementAt(NumerClient).Fold = false;
+                AllPlayers.ElementAt(NumerClient).Check = false;
+                AllPlayers.ElementAt(NumerClient).Bet = 0;
+                Console.WriteLine("Połączono klienta numer: " + (NumerClient + 1) + "AdresIP: ", AllPlayers.ElementAt(NumerClient).IPEnd
+                    + "Port: " + AllPlayers.ElementAt(NumerClient).PortEnd);
+                NumerClient++;
+            }
+            return AllPlayers;
+        }  
+        
+        // wysłanie wiadomości do wszystkich
+        private static void SendToAll(byte message, List<Player> Players)
+        {
+            foreach (Player Player in Players)
+            {
+                Player.Writer.Write(message);
+            }
+        }
+
+        // wysyłanie wiadomości do jednego 
+        private static void SendToOne(byte message, Player Player)
+        {
+            Player.Writer.Write(message);
+        }
+
+        //odebranie wiadomości
+        private static string ReadFromOne(Player Player)
+        {
+            return Player.Reader.ReadString();
+        }
+
         static void Main(string[] args)
         {
             bool EndOfRound = false;
-            Player Player1 = new Player { ID = 1, Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
-            Player Player2 = new Player { ID = 2, Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
-            Player Player3 = new Player { ID = 3, Chips = 1000, IsPlaying = false, Fold = false, Check = false, Bet = 0 };
-            Player Player4 = new Player { ID = 4, Chips = 1000, IsPlaying = true, Fold = false, Check = false, Bet = 0 };
-            List<Player> AllPlayers = new List<Player>(){ Player1, Player2, Player3, Player4 };
+            List<Player> AllPlayers = Communication();
             foreach (Player Player in AllPlayers)
             {
                 Console.WriteLine("Gracz " + Player.ID + " gotowy");
@@ -1329,6 +1435,12 @@ namespace serwer_poker
                     Console.WriteLine("Pierwsze rozdanie kart na stół");
                     Table.Deal(CardsOnTable, 3);
                     Table.ShowCards();
+                    int SentCards = 0;
+                    while (SentCards < 3)
+                    {
+                        SendToAll(Table.CommunityCards.ElementAt(SentCards), AllPlayers);
+                        SentCards++;
+                    }
                     Console.WriteLine("Licytacja 2");
                     EndOfRound = NextBetting(AllPlayers, Table);
                     if (!EndOfRound)
@@ -1336,12 +1448,22 @@ namespace serwer_poker
                         Console.WriteLine("Drugie rozdanie kart na stół");
                         Table.Deal(CardsOnTable, 1);
                         Table.ShowCards();
+                        while (SentCards < 4)
+                        {
+                            SendToAll(Table.CommunityCards.ElementAt(SentCards), AllPlayers);
+                            SentCards++;
+                        }
                         Console.WriteLine("Licytacja 3");
                         EndOfRound = NextBetting(AllPlayers, Table);
                         if (!EndOfRound)
                         {
                             Console.WriteLine("Trzecie i ostatnie rozdanie kart na stół");
                             Table.Deal(CardsOnTable, 1);
+                            while (SentCards < 5)
+                            {
+                                SendToAll(Table.CommunityCards.ElementAt(SentCards), AllPlayers);
+                                SentCards++;
+                            }
                             Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
                             Table.ShowCards();
                             Console.WriteLine("Licytacja 4");
