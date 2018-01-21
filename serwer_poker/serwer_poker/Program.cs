@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -131,7 +132,7 @@ namespace serwer_poker
             TempDeck.Clear();
         }
 
-        static void SmallBlind(Player Player, Table Table)
+        static void SmallBlind(Player Player, Table Table, List<Player> Players)
         {
             if (Player.Chips < 50)/*wartości stawek do ustalenia*/
             {
@@ -145,9 +146,11 @@ namespace serwer_poker
                 Player.Bet = 50;
                 Player.Chips -= 50;
             }
+            string Message = "coin " + Player.ID + " " + Player.Bet + " " + Player.Chips;
+            SendToAll(Message, Players);
         }
 
-        static void BigBlind(Player Player, Table Table)
+        static void BigBlind(Player Player, Table Table, List<Player> Players)
         {
             if (Player.Chips < 100)/*wartości stawek do ustalenia*/
             {
@@ -163,14 +166,25 @@ namespace serwer_poker
                 Player.Chips -= 100;
                 Table.Bid = 100;//jak bigblind
             }
+            string Message = "coin " + Player.ID + " " + Player.Bet + " " + Player.Chips;
+            SendToAll(Message, Players);
         }
 
         static void Call(Player Player, Table Table)
         {
             int Difference = Table.Bid - Player.Bet;
-            Table.Pot += Difference;
-            Player.Bet += Difference;
-            Player.Chips -= Difference;
+            if (Difference > Player.Chips)
+            {
+                Table.Pot += Player.Chips;
+                Player.Bet += Player.Chips;
+                Player.Chips = 0;
+            }
+            else
+            {
+                Table.Pot += Difference;
+                Player.Bet += Difference;
+                Player.Chips -= Difference;
+            }  
         }
 
         static void Raise(Player Player, Table Table, int Bid)
@@ -181,32 +195,32 @@ namespace serwer_poker
             Player.Chips -= Bid;
         }
 
+        public static int IndexOfPlayer;
         /*Pierwsza licytacja obejmująca Blindy*/
         static bool FirstBetting(List<Player> Players, Table Table)
         {
             bool EndOfRound;
             /*Ustalenie rozpoczynającego gracza i przydzielenie blindów*/
-            int IndexOfPlayer;
             if (Players.Count() == 2)
             {
-                SmallBlind(Players.ElementAt(0), Table);
-                BigBlind(Players.ElementAt(1), Table);
+                SmallBlind(Players.ElementAt(0), Table, Players);
+                BigBlind(Players.ElementAt(1), Table, Players);
                 IndexOfPlayer = 0;
             }
             else if (Players.Count() == 3)
             {
-                SmallBlind(Players.ElementAt(1), Table);
-                BigBlind(Players.ElementAt(2), Table);
+                SmallBlind(Players.ElementAt(1), Table, Players);
+                BigBlind(Players.ElementAt(2), Table, Players);
                 IndexOfPlayer = 0;
             }
             else
             {
-                SmallBlind(Players.ElementAt(1), Table);
-                BigBlind(Players.ElementAt(2), Table);
+                SmallBlind(Players.ElementAt(1), Table, Players);
+                BigBlind(Players.ElementAt(2), Table, Players);
                 IndexOfPlayer = 3;
             }
 
-            EndOfRound = Betting(Players, Table, IndexOfPlayer);
+            EndOfRound = Betting(Players, Table);
             return EndOfRound;
         }
 
@@ -214,23 +228,12 @@ namespace serwer_poker
         static bool NextBetting(List<Player> Players, Table Table)
         {
             bool EndOfRound;
-            /*Ustalenie rozpoczynającego gracza*/
-            int IndexOfPlayer;
-            if (Players.Count() <= 3)
-            {
-                IndexOfPlayer = 0;
-            }
-            else
-            {
-                IndexOfPlayer = 3;
-            }
-
-            EndOfRound = Betting(Players, Table, IndexOfPlayer);
+            EndOfRound = Betting(Players, Table);
             return EndOfRound;
         }
 
         /*Metoda licytacji*/
-        static bool Betting(List<Player> Players, Table Table, int IndexOfPlayer)
+        static bool Betting(List<Player> Players, Table Table)
         {
             int Decision = 0;
             bool ContinueBetting = true;
@@ -238,7 +241,7 @@ namespace serwer_poker
             while (ContinueBetting)
             {
                 bool Control = true;
-                if (!Players.ElementAt(IndexOfPlayer).Fold)
+                if (!Players.ElementAt(IndexOfPlayer).Fold || !Players.ElementAt(IndexOfPlayer).AllIn)
                 {
                     Console.WriteLine("tura gracza " + Players.ElementAt(IndexOfPlayer).ID);
                     Console.WriteLine("aktualna stawka: " + Table.Bid + " żetonów");
@@ -252,20 +255,15 @@ namespace serwer_poker
                         Console.WriteLine("Fold:" + Player.Fold);
                         Console.WriteLine("Check:" + Player.Check);
                     }
+                    //Console.ReadKey();
                     /*decyzja gracza zapisana do zmiennej
                      przesyłana jako int:
-                     -1 - fold, 0 - call/check, wartość_int - raise, max_int - all in*/
+                     -1 - fold, 0 - call/check, wartość_int - raise, 50000 - all in*/
                     SendToOne("play", Players.ElementAt(IndexOfPlayer));
-                    Console.WriteLine("podejmij decyzję");                    
-                    try
-                    {
-                        string decyzja = ReadFromOne(Players.ElementAt(IndexOfPlayer));
-                        Decision = int.Parse(decyzja);
-                    }
-                    catch (Exception ex)
-                    {
-                        Decision = 0;
-                    }
+                    //Console.ReadKey();
+                    Console.WriteLine("podejmij decyzję");
+                    string decyzja = ReadFromOne(Players.ElementAt(IndexOfPlayer));
+                    Decision = int.Parse(decyzja);
                     
                     Console.WriteLine("podjęto decyzję " + Decision);
                     switch (Decision)
@@ -288,6 +286,7 @@ namespace serwer_poker
                                 {
                                     Console.WriteLine("call");
                                     Call(Players.ElementAt(IndexOfPlayer), Table);
+                                    Players.ElementAt(IndexOfPlayer).Check = true;
                                     break;
                                 }
                             }
@@ -296,6 +295,7 @@ namespace serwer_poker
                                 Console.WriteLine("all in");
                                 Call(Players.ElementAt(IndexOfPlayer), Table);
                                 Raise(Players.ElementAt(IndexOfPlayer), Table, Players.ElementAt(IndexOfPlayer).Chips);
+                                
                                 foreach (Player Player in Players)
                                 {
                                     if (!Player.Fold)
@@ -303,21 +303,41 @@ namespace serwer_poker
                                         Player.Check = false;
                                     }
                                 }
+                                Players.ElementAt(IndexOfPlayer).Check = true;
+                                Players.ElementAt(IndexOfPlayer).AllIn = true;
                                 break;
                             }
                         default:/*call+raise*/
                             {
                                 Console.WriteLine("raise");
-                                Call(Players.ElementAt(IndexOfPlayer), Table);
-                                Raise(Players.ElementAt(IndexOfPlayer), Table, Decision);
-                                foreach (Player Player in Players)
+                                if (Decision > Players.ElementAt(IndexOfPlayer).Chips)
                                 {
-                                    if (!Player.Fold)
+                                    Call(Players.ElementAt(IndexOfPlayer), Table);
+                                    Raise(Players.ElementAt(IndexOfPlayer), Table, Players.ElementAt(IndexOfPlayer).Chips);
+                                    foreach (Player Player in Players)
                                     {
-                                        Player.Check = false;
+                                        if (!Player.Fold)
+                                        {
+                                            Player.Check = false;
+                                        }
                                     }
+                                    Players.ElementAt(IndexOfPlayer).Check = true;
+                                    break;
                                 }
-                                break;
+                                else
+                                {
+                                    Call(Players.ElementAt(IndexOfPlayer), Table);
+                                    Raise(Players.ElementAt(IndexOfPlayer), Table, Decision);
+                                    foreach (Player Player in Players)
+                                    {
+                                        if (!Player.Fold)
+                                        {
+                                            Player.Check = false;
+                                        }
+                                    }
+                                    Players.ElementAt(IndexOfPlayer).Check = true;
+                                    break;
+                                } 
                             }
                     }
                     string Message = "coin " + Players.ElementAt(IndexOfPlayer).ID + " " + Players.ElementAt(IndexOfPlayer).Bet + " " +
@@ -402,7 +422,8 @@ namespace serwer_poker
                 if (!Player.Fold)
                 {
                     Console.WriteLine("Gracz " + Player.ID + " nie sfoldował");
-                    List<byte> WholeHand = Player.Hand;
+                    List<byte> WholeHand = new List<byte>();
+                    WholeHand.AddRange(Player.Hand);
                     WholeHand.AddRange(TableCards);
                     Console.WriteLine("cała ręka");
                     foreach (var card in WholeHand)
@@ -1311,22 +1332,33 @@ namespace serwer_poker
             Table.Bid = 0;
             Table.CommunityCards.Clear();
             Table.Pot = 0;
+            Console.WriteLine("przesyłam karty do wglądu");
+            ShowHands(Players);
+
             foreach (Player Player in Players)
-            {
+            {                
                 Player.Hand.Clear();
                 Player.TieBreaker.Clear();
                 Player.TieBreakerColor.Clear();
                 Player.Fold = false;
                 Player.Check = false;
+                Player.AllIn = false;
                 Player.Bet = 0;
-                Player.ValueOfHand = 0;
-                string Message = "coin " + Player.ID + " 0 " + Player.Chips;
-                SendToAll(Message, Players);
+                Player.ValueOfHand = 0;                
+                
                 if (Player.Chips==0)
                 {
                     Player.IsPlaying = false;
                 }
             }
+
+            Console.WriteLine("przesyłam nowy stan żetonów");
+            foreach (Player Player in Players)
+            {                
+                string Message = "coin " + Player.ID + " " + Player.Bet + " " + Player.Chips;
+                SendToAll(Message, Players);
+            }
+
             Console.WriteLine("Kolejność graczy w poprzedniej rundzie");
             foreach (var item in Players)
             {
@@ -1357,25 +1389,29 @@ namespace serwer_poker
                 Console.WriteLine("Podaj adres IP sewera");
                 try
                 {
-                    ip = IPAddress.Parse(Console.ReadLine());
+                    //ip = IPAddress.Parse(Console.ReadLine());
+                    ip = IPAddress.Parse("25.93.171.67");
                 }
                 catch
                 {
                     Console.WriteLine("Niewłaściwy sposób podania typ powinien być 127.0.0.1");
                 }
             }
+            Console.WriteLine(ip);
             //deklaracja portu
             while (port == 0)
             {
                 Console.WriteLine("Podaj numer portu serwera");
                 try
                 {
-                    port = Int32.Parse(Console.ReadLine());
+                    //port = Int32.Parse(Console.ReadLine());
+                    port = Int32.Parse("8000");
                 }
                 catch
                 {
                     Console.WriteLine("Niewłaściwy sposób podania liczba powina być całkowita");
                 }
+                Console.WriteLine(port);
             }
             server = new TcpListener(ip, port);
             server.Start();
@@ -1420,8 +1456,12 @@ namespace serwer_poker
                 AllPlayers.ElementAt(NumerClient).Chips = 10000;
                 AllPlayers.ElementAt(NumerClient).Fold = false;
                 AllPlayers.ElementAt(NumerClient).Check = false;
+                AllPlayers.ElementAt(NumerClient).AllIn = false;
                 AllPlayers.ElementAt(NumerClient).Bet = 0;
                 Console.WriteLine("Połączono klienta numer: " + (NumerClient + 1));
+                string Message = "coin " + AllPlayers.ElementAt(NumerClient).ID + " " + AllPlayers.ElementAt(NumerClient).Bet + " "
+                    + AllPlayers.ElementAt(NumerClient).Chips;
+                SendToAll(Message, AllPlayers);
                 NumerClient++;
             }
             return AllPlayers;
@@ -1441,13 +1481,13 @@ namespace serwer_poker
         }
 
         static void SendingCards(List<byte> TableCards, List<Player> Players)
-        {
-            string Message = "card c1";
+        {        
+            string Message = "card C1";
             for (int i = 0; i < 3; i++)
             {
+                Console.WriteLine("dodaję do wiadomości kartę z indeksu " + i + " o wartości " + TableCards.ElementAt(i));
                 Message += " " + TableCards.ElementAt(i);
-            }
-            Message += " c2 " + TableCards.ElementAt(3) + " c3 " + TableCards.ElementAt(4);
+            }            
             SendToAll(Message, Players);
         }
         
@@ -1458,6 +1498,7 @@ namespace serwer_poker
             {
                 try               
                 {
+                    Console.WriteLine(message);
                     Player.Writer.Write(message);
                 }
                 catch
@@ -1473,6 +1514,7 @@ namespace serwer_poker
         {
             try
             {
+                Console.WriteLine(message);
                 Player.Writer.Write(message);
             }
             catch
@@ -1484,9 +1526,26 @@ namespace serwer_poker
         //odebranie wiadomości
         public static string ReadFromOne(Player Player)
         {
-            return Player.Reader.ReadString();
+            string Response;
+            Response = Player.Reader.ReadString();
+            Console.WriteLine("Wiadomość od gracza" + Player.ID + ": " + Response);
+            return Response;
         }
 
+        public static void ShowHands(List<Player> Players)
+        {
+            string Message = "";
+            foreach  (Player Player in Players)
+            {
+                Message = "card " + Player.ID;
+                foreach (byte Card in Player.Hand)
+                {
+                    Message += " " + Card;
+                }
+                SendToAll(Message, Players);
+            }
+            Thread.Sleep(30000);
+        }
         //static void TimeEventProcessor(object MyObject, EventArgs MyEventArg)
         //{
             
@@ -1502,15 +1561,18 @@ namespace serwer_poker
             {
                 Console.WriteLine("Gracz " + Player.ID + " gotowy");
             }            
-            Table Table = new Table { Pot = 0, Bid = 0 };
-            foreach(Player Player in AllPlayers)
-            {
-                Message = "start " + Player.ID;
-                SendToOne(Message, Player);
-            }
+            Table Table = new Table { Pot = 0, Bid = 0 };            
             AllPlayers = WhoIsPlaying(AllPlayers);//usuwanie z listy graczy niegrających
             while (AllPlayers.Count() >= 2)
             {
+                Console.WriteLine("nowe rozdanie");
+                foreach (Player Player in AllPlayers)
+                {
+                    Message = "start " + Player.ID;
+                    SendToOne(Message, Player);
+                    Message = "coin " + Player.ID + " " + Player.Bet + " " + Player.Chips;
+                    SendToAll(Message, AllPlayers);
+                }
                 foreach (Player Player in AllPlayers)
                 {
                     Console.WriteLine("Gracz " + Player.ID + " gra");
@@ -1523,8 +1585,7 @@ namespace serwer_poker
                 {
                     Player.ShowCards();
                 }
-                List<byte> CardsOnTable = DealCards(DeckToPlay, 5);
-                SendingCards(CardsOnTable, AllPlayers);
+                List<byte> CardsOnTable = DealCards(DeckToPlay, 5);                
                 Console.WriteLine("Licytacja 1");
                 //Timer.Tick += new EventHandler(TimeEventProcessor);
                 EndOfRound = FirstBetting(AllPlayers, Table);
@@ -1533,6 +1594,7 @@ namespace serwer_poker
                     Console.WriteLine("Pierwsze rozdanie kart na stół");
                     Table.Deal(CardsOnTable, 3);
                     Table.ShowCards();
+                    SendingCards(Table.CommunityCards, AllPlayers);
                     Console.WriteLine("Licytacja 2");
                     EndOfRound = NextBetting(AllPlayers, Table);
                     if (!EndOfRound)
@@ -1540,6 +1602,8 @@ namespace serwer_poker
                         Console.WriteLine("Drugie rozdanie kart na stół");
                         Table.Deal(CardsOnTable, 1);
                         Table.ShowCards();
+                        Message = "card C2 " + Table.CommunityCards.ElementAt(3);
+                        SendToAll(Message, AllPlayers);
                         Console.WriteLine("Licytacja 3");
                         EndOfRound = NextBetting(AllPlayers, Table);
                         if (!EndOfRound)
@@ -1548,6 +1612,8 @@ namespace serwer_poker
                             Table.Deal(CardsOnTable, 1);
                             Console.WriteLine("Kart w talii: " + DeckToPlay.Count());
                             Table.ShowCards();
+                            Message = "card C3 " + Table.CommunityCards.ElementAt(4);
+                            SendToAll(Message, AllPlayers);
                             Console.WriteLine("Licytacja 4");
                             EndOfRound = NextBetting(AllPlayers, Table);
                             if (!EndOfRound)
@@ -1579,8 +1645,9 @@ namespace serwer_poker
                 AllPlayers = PreperationForNextRound(AllPlayers, Table);
                 //Console.ReadKey();
             }
-            Message = "wygrana " + AllPlayers.ElementAt(0);
+            Message = "wygrana " + AllPlayers.ElementAt(0).ID;
             SendToAll(Message, EndPlayers);
+            Console.ReadKey();
         }
     }
 }

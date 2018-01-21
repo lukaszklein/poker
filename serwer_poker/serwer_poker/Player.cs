@@ -27,6 +27,7 @@ namespace serwer_poker
         public int Bet;//ile postawił do tej pory
         public int ID;
         public uint ValueOfHand;
+        public bool AllIn;
 
         public void AddCard(byte Card)
         {
