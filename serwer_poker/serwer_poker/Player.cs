@@ -24,7 +24,7 @@ namespace serwer_poker
         public bool IsPlaying;//czy połączony
         public bool Fold;
         public bool Check;
-        public int Bet;
+        public int Bet;//ile postawił do tej pory
         public int ID;
         public uint ValueOfHand;
 
