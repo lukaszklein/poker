@@ -280,6 +280,10 @@ namespace serwer_poker
                                 {
                                     Console.WriteLine("check");
                                     Players.ElementAt(IndexOfPlayer).Check = true;
+                                    if (Players.ElementAt(IndexOfPlayer).Chips==0)
+                                    {
+                                        Players.ElementAt(IndexOfPlayer).AllIn = true;
+                                    }
                                     break;
                                 }
                                 else
@@ -287,6 +291,10 @@ namespace serwer_poker
                                     Console.WriteLine("call");
                                     Call(Players.ElementAt(IndexOfPlayer), Table);
                                     Players.ElementAt(IndexOfPlayer).Check = true;
+                                    if (Players.ElementAt(IndexOfPlayer).Chips == 0)
+                                    {
+                                        Players.ElementAt(IndexOfPlayer).AllIn = true;
+                                    }
                                     break;
                                 }
                             }
@@ -322,6 +330,10 @@ namespace serwer_poker
                                         }
                                     }
                                     Players.ElementAt(IndexOfPlayer).Check = true;
+                                    if (Players.ElementAt(IndexOfPlayer).Chips==0)
+                                    {
+                                        Players.ElementAt(IndexOfPlayer).AllIn = true;
+                                    }
                                     break;
                                 }
                                 else
@@ -571,7 +583,9 @@ namespace serwer_poker
                         Console.WriteLine("sprawdzam czy jest poker");
                         int DifferenceOneColor = 0;
                         StraightColor1 = 0;
-                        List<byte> DistinctColor = ColorHand;
+                        //List<byte> DistinctColor = ColorHand;
+                        List<byte> DistinctColor = new List<byte>();
+                        DistinctColor.AddRange(ColorHand);
                         DistinctColor.Sort();
                         Console.WriteLine("distinct color");
                         foreach (var item in DistinctColor)
@@ -815,7 +829,9 @@ namespace serwer_poker
                             {
                                 int DifferenceOne = 0;
                                 Straight1 = 0;
-                                List<byte> StraightHand = DistinctHand(ValueHand);
+                                //List<byte> StraightHand = DistinctHand(ValueHand);
+                                List<byte> StraightHand = new List<byte>();
+                                StraightHand.AddRange(DistinctHand(ValueHand));
                                 Console.WriteLine("pozbycie się duplikatów wartości");
                                 foreach (var item in StraightHand)
                                 {
@@ -1389,8 +1405,8 @@ namespace serwer_poker
                 Console.WriteLine("Podaj adres IP sewera");
                 try
                 {
-                    //ip = IPAddress.Parse(Console.ReadLine());
-                    ip = IPAddress.Parse("25.93.171.67");
+                    ip = IPAddress.Parse(Console.ReadLine());
+                    //ip = IPAddress.Parse("42.0.229.146");
                 }
                 catch
                 {
